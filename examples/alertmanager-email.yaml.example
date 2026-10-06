@@ -1,0 +1,14 @@
+# 这是接收器/全局字段示例，需与已有完整配置合并；不直接apply。
+# 必须本地填写邮箱与SMTP授权码，不发到聊天或Git。
+global:
+  smtp_smarthost: smtp.qq.com:587
+  smtp_require_tls: true
+  smtp_from: FILL_LOCALLY
+  smtp_auth_username: FILL_LOCALLY
+  smtp_auth_password: FILL_LOCALLY
+receivers:
+  - name: qq-lab-core
+    email_configs:
+      - to: FILL_LOCALLY
+        send_resolved: true
+  - name: codex-efk-internal-validation

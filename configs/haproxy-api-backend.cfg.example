@@ -1,0 +1,9 @@
+backend kubernetes-masters
+  balance roundrobin
+  # TCP可连不能说明apiserver已就绪；仅探活使用TLS，业务仍为原端到端TCP透传。
+  option httpchk GET /readyz
+  http-check expect status 200
+  timeout check 3s
+  server master01 192.0.2.11:6443 check check-ssl verify required ca-file /etc/haproxy/k8s-public-ca.pem inter 3s fall 2 rise 2 on-marked-down shutdown-sessions
+  server master02 192.0.2.12:6443 check check-ssl verify required ca-file /etc/haproxy/k8s-public-ca.pem inter 3s fall 2 rise 2 on-marked-down shutdown-sessions
+  server master03 192.0.2.13:6443 check check-ssl verify required ca-file /etc/haproxy/k8s-public-ca.pem inter 3s fall 2 rise 2 on-marked-down shutdown-sessions

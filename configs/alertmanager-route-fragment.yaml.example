@@ -1,0 +1,47 @@
+mail_receiver_reference: qq-lab-core (retain private existing email config)
+receiver_fragment:
+- name: codex-efk-internal-validation
+route_fragment:
+- continue: false
+  match:
+    project: k8s-efk-validation
+  receiver: codex-efk-internal-validation
+- continue: false
+  group_by:
+  - alertname
+  - namespace
+  - pod
+  - instance
+  group_interval: 10m
+  group_wait: 1m
+  match:
+    project: k8s-efk-lab
+  match_re:
+    severity: warning|critical
+  receiver: qq-lab-core
+  repeat_interval: 4h
+- continue: false
+  group_by:
+  - alertname
+  - namespace
+  - instance
+  group_interval: 10m
+  group_wait: 1m
+  match_re:
+    alertname: KubeContainerWaiting|KubeDeploymentReplicasMismatch|KubeDeploymentRolloutStuck|KubePersistentVolumeErrors|KubePersistentVolumeFillingUp|KubePersistentVolumeInodesFillingUp|KubePodCrashLooping|KubePodNotReady|KubeStatefulSetReplicasMismatch
+    namespace: logging|spring-cloud
+    severity: warning|critical
+  receiver: qq-lab-core
+  repeat_interval: 4h
+- continue: false
+  group_by:
+  - alertname
+  - namespace
+  - instance
+  group_interval: 10m
+  group_wait: 1m
+  match_re:
+    alertname: AlertmanagerFailedReload|AlertmanagerFailedToSendAlerts|KubeNodeNotReady|KubeNodeReadinessFlapping|KubeNodeUnreachable|NodeCPUHighUsage|NodeDiskIOSaturation|NodeFileDescriptorLimit|NodeFilesystemAlmostOutOfFiles|NodeFilesystemAlmostOutOfSpace|NodeFilesystemFilesFillingUp|NodeFilesystemSpaceFillingUp|NodeMemoryHighUtilization|NodeNetworkReceiveErrs|NodeNetworkTransmitErrs|NodeSystemSaturation|NodeTextFileCollectorScrapeError|PrometheusMissingRuleEvaluations|PrometheusNotConnectedToAlertmanagers|PrometheusRuleFailures|TargetDown
+    severity: warning|critical
+  receiver: qq-lab-core
+  repeat_interval: 4h

@@ -1,0 +1,11 @@
+# 发布示例：源自实验最终对象并做去敏/参数化；修改示例地址与镜像、准备合法工件后审阅应用。
+# 这些发布模板未重新部署；本仓库保留原实验的已验证事实与转换边界。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spring-cloud
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging

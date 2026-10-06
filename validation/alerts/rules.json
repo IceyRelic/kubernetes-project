@@ -1,0 +1,165 @@
+{
+  "groups": [
+    {
+      "name": "codex-efk-health",
+      "rules": [
+        {
+          "alert": "LabESNoReadyReplica",
+          "expr": "(kube_statefulset_status_replicas_ready{namespace=\"logging\",statefulset=\"elasticsearch\"} == 0) and on(namespace,statefulset) (kube_statefulset_replicas{namespace=\"logging\",statefulset=\"elasticsearch\"} > 0)",
+          "for": "2m",
+          "labels": {
+            "severity": "critical",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Elasticsearch没有就绪副本",
+            "description": "检查logging/elasticsearch Pod、PVC及NFS；单副本实验没有高可用保证。"
+          }
+        },
+        {
+          "alert": "LabKibanaNoAvailableReplica",
+          "expr": "(kube_deployment_status_replicas_available{namespace=\"logging\",deployment=\"kibana\"} == 0) and on(namespace,deployment) (kube_deployment_spec_replicas{namespace=\"logging\",deployment=\"kibana\"} > 0)",
+          "for": "2m",
+          "labels": {
+            "severity": "critical",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Kibana没有可用副本",
+            "description": "检查logging/kibana状态及Elasticsearch连接；replicas=0的计划停用不触发此规则。"
+          }
+        },
+        {
+          "alert": "LabFluentBitCoverageIncomplete",
+          "expr": "(kube_daemonset_status_number_ready{namespace=\"logging\",daemonset=\"fluent-bit\"} < kube_daemonset_status_desired_number_scheduled{namespace=\"logging\",daemonset=\"fluent-bit\"}) and on(namespace,daemonset) (kube_daemonset_status_desired_number_scheduled{namespace=\"logging\",daemonset=\"fluent-bit\"} > 0)",
+          "for": "5m",
+          "labels": {
+            "severity": "warning",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Fluent Bit采集覆盖不足",
+            "description": "检查未就绪节点的采集Pod；此规则比较当前期望与就绪数，不固定写死5台。"
+          }
+        },
+        {
+          "alert": "LabFluentBitMetricsTargetDown",
+          "expr": "up{job=\"codex-fluent-bit-metrics\"} == 0",
+          "for": "2m",
+          "labels": {
+            "severity": "warning",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Fluent Bit指标目标不可达",
+            "description": "检查采集器2020端口及ServiceMonitor；指标抓取失败不等于日志一定停止。"
+          }
+        },
+        {
+          "alert": "LabFluentBitMetricsMissing",
+          "expr": "absent(up{job=\"codex-fluent-bit-metrics\"}) and on() (sum(kube_daemonset_status_desired_number_scheduled{namespace=\"logging\",daemonset=\"fluent-bit\"}) > 0)",
+          "for": "5m",
+          "labels": {
+            "severity": "warning",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Fluent Bit全部指标缺失",
+            "description": "检查ServiceMonitor和服务发现；采集器计划停用且期望为0时不触发。"
+          }
+        },
+        {
+          "alert": "LabFluentBitOutputErrors",
+          "expr": "increase(fluentbit_output_errors_total{job=\"codex-fluent-bit-metrics\"}[5m]) > 0",
+          "for": "2m",
+          "labels": {
+            "severity": "warning",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Fluent Bit输出持续报错",
+            "description": "检查Elasticsearch可写状态、容量及Fluent Bit输出；errors/retries统计块，dropped_records统计记录，不能混写丢失条数。"
+          }
+        },
+        {
+          "alert": "LabFluentBitDroppedRecords",
+          "expr": "increase(fluentbit_output_dropped_records_total{job=\"codex-fluent-bit-metrics\"}[5m]) > 0",
+          "for": "2m",
+          "labels": {
+            "severity": "critical",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Fluent Bit丢弃日志记录",
+            "description": "检查Elasticsearch可写状态、容量及Fluent Bit输出；errors/retries统计块，dropped_records统计记录，不能混写丢失条数。"
+          }
+        },
+        {
+          "alert": "LabFluentBitRetryExhausted",
+          "expr": "increase(fluentbit_output_retries_failed_total{job=\"codex-fluent-bit-metrics\"}[5m]) > 0",
+          "for": "2m",
+          "labels": {
+            "severity": "critical",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Fluent Bit输出重试耗尽",
+            "description": "检查Elasticsearch可写状态、容量及Fluent Bit输出；errors/retries统计块，dropped_records统计记录，不能混写丢失条数。"
+          }
+        },
+        {
+          "alert": "LabESHTTPHealthFailed",
+          "expr": "probe_success{job=\"codex-efk-es-api\",project=\"k8s-efk-lab\"} == 0",
+          "for": "2m",
+          "labels": {
+            "severity": "critical",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Elasticsearch HTTP健康检查失败",
+            "description": "检查应用接口、DNS和网络；ES允许单节点yellow，red或响应不匹配失败，Kibana需overall green。"
+          }
+        },
+        {
+          "alert": "LabKibanaHTTPHealthFailed",
+          "expr": "probe_success{job=\"codex-efk-kibana-api\",project=\"k8s-efk-lab\"} == 0",
+          "for": "2m",
+          "labels": {
+            "severity": "critical",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "Kibana HTTP健康检查失败",
+            "description": "检查应用接口、DNS和网络；ES允许单节点yellow，red或响应不匹配失败，Kibana需overall green。"
+          }
+        },
+        {
+          "alert": "LabApplicationNewOOM",
+          "expr": "(max by(namespace,pod,container) (kube_pod_container_status_last_terminated_reason{namespace=~\"logging|spring-cloud\",reason=\"OOMKilled\"}) == 1) and on(namespace,pod,container) (max by(namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~\"logging|spring-cloud\"}[5m])) > 0)",
+          "for": "1m",
+          "labels": {
+            "severity": "critical",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "应用或日志容器发生新的OOM重启",
+            "description": "结合最近重启增量判断，避免旧OOM原因一直报警；检查宿主压力及容器limit。"
+          }
+        },
+        {
+          "alert": "LabApplicationNearMemoryLimit",
+          "expr": "(max by(namespace,pod,container) (container_memory_working_set_bytes{namespace=~\"logging|spring-cloud\",container!=\"\",container!=\"POD\"}) / on(namespace,pod,container) max by(namespace,pod,container) (kube_pod_container_resource_limits{namespace=~\"logging|spring-cloud\",resource=\"memory\"} > 0)) > 0.9",
+          "for": "10m",
+          "labels": {
+            "severity": "warning",
+            "project": "k8s-efk-lab"
+          },
+          "annotations": {
+            "summary": "应用或日志容器接近内存上限",
+            "description": "连续10分钟工作集超过limit的90%；工作集不是JVM堆，需结合进程和宿主内存检查。"
+          }
+        }
+      ]
+    }
+  ]
+}

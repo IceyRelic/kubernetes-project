@@ -1,0 +1,4 @@
+# 仅展示本次持久只读目标；不用于覆盖原my.cnf或复制凭据。
+[mysqld]
+read_only=ON
+super_read_only=ON

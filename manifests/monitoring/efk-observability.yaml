@@ -1,0 +1,344 @@
+# 发布示例：源自实验最终对象并做去敏/参数化；修改示例地址与镜像、准备合法工件后审阅应用。
+# 这些发布模板未重新部署；本仓库保留原实验的已验证事实与转换边界。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    project: k8s-efk-lab
+  name: codex-fluent-bit-metrics
+  namespace: monitoring
+spec:
+  endpoints:
+  - interval: 30s
+    path: /api/v1/metrics/prometheus
+    port: http-metrics
+  namespaceSelector:
+    matchNames:
+    - logging
+  selector:
+    matchLabels:
+      app: codex-fluent-bit-metrics
+---
+apiVersion: v1
+data:
+  blackbox.yml: |
+    modules:
+      efk_es_ready:
+        http:
+          fail_if_body_not_matches_regexp:
+          - '"status"\s*:\s*"(green|yellow)"'
+          preferred_ip_protocol: ip4
+          valid_status_codes:
+          - 200
+        prober: http
+        timeout: 5s
+      efk_kibana_ready:
+        http:
+          fail_if_body_not_matches_regexp:
+          - '"overall"\s*:\s*\{[^}]*"state"\s*:\s*"green"'
+          preferred_ip_protocol: ip4
+          valid_status_codes:
+          - 200
+        prober: http
+        timeout: 5s
+kind: ConfigMap
+metadata:
+  name: codex-efk-blackbox
+  namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: codex-efk-blackbox
+    project: k8s-efk-lab
+  name: codex-efk-blackbox
+  namespace: monitoring
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: codex-efk-blackbox
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: codex-efk-blackbox
+        project: k8s-efk-lab
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - --config.file=/etc/blackbox/blackbox.yml
+        - --web.listen-address=:9115
+        image: quay.m.daocloud.io/prometheus/blackbox-exporter:v0.25.0
+        imagePullPolicy: Never
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /-/healthy
+            port: http
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: blackbox
+        ports:
+        - containerPort: 9115
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /-/healthy
+            port: http
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 16Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/blackbox
+          name: config
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        kubernetes.io/hostname: k8s-worker02
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: codex-efk-blackbox
+        name: config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: codex-efk-blackbox
+    project: k8s-efk-lab
+  name: codex-efk-blackbox
+  namespace: monitoring
+spec:
+  ports:
+  - name: http
+    port: 9115
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: codex-efk-blackbox
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: codex-efk-blackbox
+  namespace: monitoring
+spec:
+  endpoints:
+  - interval: 30s
+    port: http
+  selector:
+    matchLabels:
+      app: codex-efk-blackbox
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  labels:
+    project: k8s-efk-lab
+  name: codex-efk-es-api
+  namespace: monitoring
+spec:
+  interval: 30s
+  jobName: codex-efk-es-api
+  module: efk_es_ready
+  prober:
+    path: /probe
+    scheme: http
+    url: codex-efk-blackbox.monitoring.svc:9115
+  scrapeTimeout: 10s
+  targets:
+    staticConfig:
+      labels:
+        project: k8s-efk-lab
+      static:
+      - http://elasticsearch.logging.svc:9200/_cluster/health
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  labels:
+    project: k8s-efk-lab
+  name: codex-efk-kibana-api
+  namespace: monitoring
+spec:
+  interval: 30s
+  jobName: codex-efk-kibana-api
+  module: efk_kibana_ready
+  prober:
+    path: /probe
+    scheme: http
+    url: codex-efk-blackbox.monitoring.svc:9115
+  scrapeTimeout: 10s
+  targets:
+    staticConfig:
+      labels:
+        project: k8s-efk-lab
+      static:
+      - http://kibana.logging.svc:5601/api/status
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    project: k8s-efk-lab
+  name: codex-efk-health
+  namespace: monitoring
+spec:
+  groups:
+  - name: codex-efk-health
+    rules:
+    - alert: LabESNoReadyReplica
+      annotations:
+        description: 检查logging/elasticsearch Pod、PVC及NFS；单副本实验没有高可用保证。
+        summary: Elasticsearch没有就绪副本
+      expr: (kube_statefulset_status_replicas_ready{namespace="logging",statefulset="elasticsearch"} ==
+        0) and on(namespace,statefulset) (kube_statefulset_replicas{namespace="logging",statefulset="elasticsearch"}
+        > 0)
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: critical
+    - alert: LabKibanaNoAvailableReplica
+      annotations:
+        description: 检查logging/kibana状态及Elasticsearch连接；replicas=0的计划停用不触发此规则。
+        summary: Kibana没有可用副本
+      expr: (kube_deployment_status_replicas_available{namespace="logging",deployment="kibana"} == 0)
+        and on(namespace,deployment) (kube_deployment_spec_replicas{namespace="logging",deployment="kibana"}
+        > 0)
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: critical
+    - alert: LabFluentBitCoverageIncomplete
+      annotations:
+        description: 检查未就绪节点的采集Pod；此规则比较当前期望与就绪数，不固定写死5台。
+        summary: Fluent Bit采集覆盖不足
+      expr: (kube_daemonset_status_number_ready{namespace="logging",daemonset="fluent-bit"} < kube_daemonset_status_desired_number_scheduled{namespace="logging",daemonset="fluent-bit"})
+        and on(namespace,daemonset) (kube_daemonset_status_desired_number_scheduled{namespace="logging",daemonset="fluent-bit"}
+        > 0)
+      for: 5m
+      labels:
+        project: k8s-efk-lab
+        severity: warning
+    - alert: LabFluentBitMetricsTargetDown
+      annotations:
+        description: 检查采集器2020端口及ServiceMonitor；指标抓取失败不等于日志一定停止。
+        summary: Fluent Bit指标目标不可达
+      expr: up{job="codex-fluent-bit-metrics"} == 0
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: warning
+    - alert: LabFluentBitMetricsMissing
+      annotations:
+        description: 检查ServiceMonitor和服务发现；采集器计划停用且期望为0时不触发。
+        summary: Fluent Bit全部指标缺失
+      expr: absent(up{job="codex-fluent-bit-metrics"}) and on() (sum(kube_daemonset_status_desired_number_scheduled{namespace="logging",daemonset="fluent-bit"})
+        > 0)
+      for: 5m
+      labels:
+        project: k8s-efk-lab
+        severity: warning
+    - alert: LabFluentBitOutputErrors
+      annotations:
+        description: 检查Elasticsearch可写状态、容量及Fluent Bit输出；errors/retries统计块，dropped_records统计记录，不能混写丢失条数。
+        summary: Fluent Bit输出持续报错
+      expr: increase(fluentbit_output_errors_total{job="codex-fluent-bit-metrics"}[5m]) > 0
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: warning
+    - alert: LabFluentBitDroppedRecords
+      annotations:
+        description: 检查Elasticsearch可写状态、容量及Fluent Bit输出；errors/retries统计块，dropped_records统计记录，不能混写丢失条数。
+        summary: Fluent Bit丢弃日志记录
+      expr: increase(fluentbit_output_dropped_records_total{job="codex-fluent-bit-metrics"}[5m]) > 0
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: critical
+    - alert: LabFluentBitRetryExhausted
+      annotations:
+        description: 检查Elasticsearch可写状态、容量及Fluent Bit输出；errors/retries统计块，dropped_records统计记录，不能混写丢失条数。
+        summary: Fluent Bit输出重试耗尽
+      expr: increase(fluentbit_output_retries_failed_total{job="codex-fluent-bit-metrics"}[5m]) > 0
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: critical
+    - alert: LabESHTTPHealthFailed
+      annotations:
+        description: 检查应用接口、DNS和网络；ES允许单节点yellow，red或响应不匹配失败，Kibana需overall green。
+        summary: Elasticsearch HTTP健康检查失败
+      expr: probe_success{job="codex-efk-es-api",project="k8s-efk-lab"} == 0
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: critical
+    - alert: LabKibanaHTTPHealthFailed
+      annotations:
+        description: 检查应用接口、DNS和网络；ES允许单节点yellow，red或响应不匹配失败，Kibana需overall green。
+        summary: Kibana HTTP健康检查失败
+      expr: probe_success{job="codex-efk-kibana-api",project="k8s-efk-lab"} == 0
+      for: 2m
+      labels:
+        project: k8s-efk-lab
+        severity: critical
+    - alert: LabApplicationNewOOM
+      annotations:
+        description: 结合最近重启增量判断，避免旧OOM原因一直报警；检查宿主压力及容器limit。
+        summary: 应用或日志容器发生新的OOM重启
+      expr: (max by(namespace,pod,container) (kube_pod_container_status_last_terminated_reason{namespace=~"logging|spring-cloud",reason="OOMKilled"})
+        == 1) and on(namespace,pod,container) (max by(namespace,pod,container) (increase(kube_pod_container_status_restarts_total{namespace=~"logging|spring-cloud"}[5m]))
+        > 0)
+      for: 1m
+      labels:
+        project: k8s-efk-lab
+        severity: critical
+    - alert: LabApplicationNearMemoryLimit
+      annotations:
+        description: 连续10分钟工作集超过limit的90%；工作集不是JVM堆，需结合进程和宿主内存检查。
+        summary: 应用或日志容器接近内存上限
+      expr: (max by(namespace,pod,container) (container_memory_working_set_bytes{namespace=~"logging|spring-cloud",container!="",container!="POD"})
+        / on(namespace,pod,container) max by(namespace,pod,container) (kube_pod_container_resource_limits{namespace=~"logging|spring-cloud",resource="memory"}
+        > 0)) > 0.9
+      for: 10m
+      labels:
+        project: k8s-efk-lab
+        severity: warning

@@ -1,0 +1,80 @@
+{
+  "recorded_date": "2026-10-06",
+  "evidence_type": "selected_existing_experiment_results",
+  "new_tests_in_publication_preparation": false,
+  "application": {
+    "passed_cases": 17,
+    "real_judging": false,
+    "maintenance_read_checks": 5
+  },
+  "hpa": {
+    "replica_sequence": [
+      2,
+      3,
+      2
+    ],
+    "min": 2,
+    "max": 3,
+    "target_cpu_percent_of_request": 20
+  },
+  "bounded_load": {
+    "threads": 8,
+    "planned_seconds": 90,
+    "pause_seconds_per_thread": 0.1,
+    "successful_requests": 6485,
+    "errors": 0,
+    "p95_ms": 15.384,
+    "capacity_limit_claimed": false
+  },
+  "mysql": {
+    "tables": 5,
+    "rows": 26,
+    "cud_propagation": true,
+    "replica_write_rejected": true,
+    "backup_currently_paused_for_efk": true,
+    "automatic_failover_tested": false
+  },
+  "nfs": {
+    "sample_files": 4,
+    "sample_bytes_approx": 1048576,
+    "independent_sample_restore": true,
+    "deletion_propagates": true,
+    "push_currently_paused": true,
+    "es_consistent_backup_tested": false
+  },
+  "efk": {
+    "normal_sample_source_records": 40,
+    "normal_sample_es_records": 40,
+    "records_per_worker": [
+      20,
+      20
+    ],
+    "unique_worker_sequence_pairs": 40,
+    "chinese_content_matches": true,
+    "metadata_matches": true,
+    "filter_input": 4,
+    "filter_retained": 2,
+    "kibana_api_records": 40,
+    "user_discover_screenshot_hits": 40,
+    "persistent_spool": false,
+    "maintenance_loss_occurred": true
+  },
+  "alerts": {
+    "prior_application_new_rules": 1,
+    "later_efk_new_rules": 12,
+    "actual_total": 147,
+    "reused_platform_rules_mail_route_expanded": 30,
+    "offline_assertions": 48,
+    "route_assertions": 4,
+    "internal_synthetic_receiver": "empty",
+    "all_real_faults_injected": false,
+    "previous_qq_test_user_receipt_confirmed": true,
+    "new_synthetic_mail_sent": false
+  },
+  "limits": [
+    "time-specific lab results",
+    "institution application not redistributed",
+    "no SLA/max-QPS/RPO0/RTO/MTTD claim",
+    "publication templates not deployed"
+  ]
+}

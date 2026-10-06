@@ -1,0 +1,24 @@
+# 已有节点、Pod、磁盘等规则保留；这条补齐核心应用完全不可用的较短等待和critical级别。
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: codex-java-app-core
+  namespace: monitoring
+  labels:
+    project: k8s-java-lab
+spec:
+  groups:
+    - name: codex-java-app-core
+      rules:
+        - alert: LabAppNoAvailableReplicas
+          expr: >-
+            (kube_deployment_status_replicas_available{namespace="spring-cloud",deployment=~"eureka-server|frontend|gateway|user-service"} == 0)
+            and on(namespace, deployment)
+            (kube_deployment_spec_replicas{namespace="spring-cloud",deployment=~"eureka-server|frontend|gateway|user-service"} > 0)
+          for: 2m
+          labels:
+            severity: critical
+            project: k8s-java-lab
+          annotations:
+            summary: '核心应用没有可用副本'
+            description: '{{ $labels.namespace }}/{{ $labels.deployment }} 连续2分钟没有可用副本，期望副本数大于0。'
